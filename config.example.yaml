@@ -1,0 +1,113 @@
+# ============================================================
+# 播客同步工具配置文件
+# ============================================================
+
+# ---------- 全局配置 ----------
+global:
+  # 日志级别：DEBUG / INFO / WARNING / ERROR
+  log_level: INFO
+
+  # 日志文件路径
+  log_file: logs/podcast_sync.log
+
+  # 单个日志文件最大字节数（默认 10MB）
+  log_max_bytes: 10485760
+
+  # 保留日志文件数量
+  log_backup_count: 5
+
+  # 临时下载目录（下载完成后上传，上传成功N天后清理）
+  temp_dir: ./tmp
+
+  # 临时文件保留天数（从上传成功开始算）
+  temp_retention_days: 7
+
+  # 调度间隔（秒）。0 表示只运行一次；86400 = 24小时
+  #schedule_interval: 86400
+  schedule_interval: 0
+
+  # 音频/视频下载并发数
+  download_concurrency: 5
+
+  # 上传间隔（秒），每次上传完成后等待
+  upload_delay: 2
+
+  # 通用重试次数（下载和上传统一使用）
+  max_retries: 3
+
+# ---------- 阿里云盘配置 ----------
+aliyun:
+  # refresh_token：通过 scripts/get_token.py 扫码获取后填入
+  # 如果留空，首次运行时会尝试弹出二维码登录
+  refresh_token: ""   # 留空则运行 scripts/get_token.py 扫码后自动填入
+
+  # 可选：token 文件路径（aligo 自动管理的持久化文件）
+  # 默认在 ~/.aligo/ 下
+  # token_file: ""
+
+# ---------- 全局代理配置（可选） ----------
+# 如果不需要代理，整个 proxy 段落删掉或留空即可
+proxy:
+  http: "http://127.0.0.1:17439"
+  https: "http://127.0.0.1:17439"
+  # 带认证的代理格式：
+  # http: "http://username:password@127.0.0.1:7890"
+
+# ---------- RSS 源列表 ----------
+# 每个源必须有 name、aliyun_dir，以及下面二选一的地址来源：
+#
+#   itunes_id（推荐）：填苹果播客的节目 ID，运行时通过
+#       https://itunes.apple.com/lookup?id=<ID>
+#     查询 results[0].feedUrl 拿到真实 RSS 地址，节目换域名时不用改配置。
+#     支持三种写法：262026947、https://itunes.apple.com/lookup?id=262026947、
+#     https://podcasts.apple.com/cn/podcast/xxx/id262026947
+#     查 ID 可用：python scripts/lookup_itunes.py 6 Minute English
+#
+#   rss_url：直接写死 RSS 地址。
+#
+# 两个都填时 itunes_id 优先，查询失败自动回退到 rss_url。
+feeds:
+  - name: "BBC 6 Minute English"
+    itunes_id: 262026947
+    rss_url: "https://podcasts.files.bbci.co.uk/p02pc9tn.rss"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/BBC_6_Minute_English"
+    enabled: true
+    max_items: 20
+    # proxy:                      # 可选：覆盖全局代理
+    #   http: "http://127.0.0.1:7891"
+    #   https: "http://127.0.0.1:7891"
+
+  - name: "The English We Speak"
+    itunes_id: 262026989
+    rss_url: "https://podcasts.files.bbci.co.uk/p02pc9zn.rss"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/The_English_We_Speak"
+    enabled: true
+    max_items: 20
+
+  - name: "Coffee Break English"
+    itunes_id: 1500388439
+    rss_url: "https://feeds.acast.com/public/coffeebreakenglish"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/Coffee_Break_English"
+    enabled: true
+    max_items: 20
+
+  - name: "This American Life"
+    itunes_id: 201671138
+    rss_url: "https://www.thisamericanlife.org/podcast/rss.xml"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/This_American_Life"
+    enabled: true
+    max_items: 20
+
+  - name: "TED Talks Daily"
+    itunes_id: 160904630
+    rss_url: "https://feeds.simplecast.com/54nAGcIlY"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/TED_Talks_Daily"
+    enabled: true
+    max_items: 20
+
+  - name: "IELTS Energy English 7+"
+    itunes_id: 969076668
+    rss_url: "https://feeds.simplecast.com/9j0F9NqA"   # 作为 iTunes 查询失败时的兜底
+    aliyun_dir: "/Podcasts/IELTS_Energy_English_7plus"
+    enabled: true
+    max_items: 20

@@ -1,0 +1,24 @@
+# ---- 运行时产物 ----
+state.db
+state.db-journal
+state.db-wal
+state.db-shm
+logs/
+tmp/
+__pycache__/
+*.py[cod]
+
+# ---- 阿里云盘凭证（含真实 refresh_token，绝不入库） ----
+config.yaml
+scripts/aliyun_token.txt
+~/.aligo/
+
+# ---- 本地环境 ----
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+nohup.out
+*.log
