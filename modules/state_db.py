@@ -31,10 +31,12 @@ class StateDB:
             conn.commit()
 
     def is_processed(self, feed_url, guid):
-        """检查某个条目是否已处理（存在即已处理，无论成功失败）"""
+        """检查某个条目是否已完成。只有 uploaded 算已处理，
+        failed / pending 的行下次还会重试"""
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.execute(
-                "SELECT id FROM processed_items WHERE feed_url=? AND guid=?",
+                "SELECT id FROM processed_items "
+                "WHERE feed_url=? AND guid=? AND status='uploaded'",
                 (feed_url, guid)
             )
             return cur.fetchone() is not None
@@ -51,6 +53,8 @@ class StateDB:
                 ON CONFLICT(feed_url, guid) DO UPDATE SET
                     status=excluded.status,
                     error_message=excluded.error_message,
+                    file_name=CASE WHEN excluded.file_name != '' THEN excluded.file_name ELSE file_name END,
+                    file_size=CASE WHEN excluded.file_size > 0 THEN excluded.file_size ELSE file_size END,
                     updated_at=CURRENT_TIMESTAMP
             """, (feed_url, guid, title, pub_date, enclosure_url,
                   file_name, file_size, status, error_message))

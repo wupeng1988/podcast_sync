@@ -48,8 +48,8 @@ Cross-cutting pieces:
 
 ### Behavioral gotchas
 
-- `state_db.is_processed` treats **any** row — `failed` included — as done, so failed downloads/uploads are never retried on later runs. `get_pending_items()` (returns `pending`/`failed` rows) exists for retry but is never called. Changing dedup semantics means touching both.
-- `mark_processed`'s upsert only updates `status`/`error_message`/`updated_at`, so a later success does not overwrite the original `file_name`/`file_size`.
+- `state_db.is_processed` only counts rows with `status='uploaded'` as done, so `failed` rows are re-attempted on every later run (no retry cap — a permanently dead enclosure URL retries forever). Retry needs no `get_pending_items()` call: the row is still in the feed's `extract_items` window, so normal iteration picks it up; an item that has fallen out of the `max_items` window is never retried. `get_pending_items()` (returns `pending`/`failed` rows) remains unused.
+- `mark_processed`'s upsert updates `status`/`error_message`/`updated_at` plus `file_name`/`file_size` — but only when the incoming values are non-empty / non-zero, so a later failed attempt doesn't wipe values an earlier attempt recorded.
 - `global.download_concurrency` is read by `Config` but `process_feed` iterates sequentially — feeds and episodes are never downloaded in parallel. `upload_delay` is a `time.sleep` between uploads inside one feed.
 - `cleanup_temp_files` deletes anything in `temp_dir` older than `temp_retention_days` by **mtime**, regardless of whether its upload succeeded.
 - `aliyun_client` sleeps 1s after folder creation and after delete to dodge Aliyun rate limits, and surfaces 429s as an `error_message` prefixed `RATE_LIMIT:`.

@@ -348,11 +348,11 @@ python scripts/lookup_itunes.py --id 262026947     # 验证 iTunes 查询链路
 | --- | --- | --- |
 | 0 | `main.resolve_rss_url` | `itunes_id` → iTunes lookup 拿 `feedUrl`；失败回退 `rss_url`；都没有则跳过 |
 | 1 | `rss_parser` | httpx（走代理）抓 RSS，条目按 `guid` 摊平（`entry.id` 优先，回退 `entry.link`） |
-| 2 | `state_db.is_processed` | **下载前**按 `(rss_url, guid)` 去重 |
+| 2 | `state_db.is_processed` | **下载前**按 `(rss_url, guid)` 去重，只认 `status='uploaded'`（`failed` 会重试） |
 | 3 | `downloader` | 流式下载到 `tmp/<节目名>/<guid><ext>`，失败退避重试 1s / 4s / 16s |
 | 4 | `naming.build_filename` | 生成 `{节目名}_{标题}_{YYYYMMDD}{ext}` |
 | 5 | `aliyun_client` | 逐级建目录（结果缓存）→ 删同名文件 → 上传 |
-| 6 | `state_db.mark_processed` | 写入 `uploaded` 或 `failed` |
+| 6 | `state_db.mark_processed` | 写入 `uploaded` 或 `failed`；`file_name`/`file_size` 只在有值时回填 |
 
 最后 `cleanup_temp_files()` 清理 `temp_dir` 中超过 `temp_retention_days` 天的文件。
 
@@ -407,15 +407,17 @@ sqlite3 state.db "SELECT title, file_name, status, error_message FROM processed_
 sqlite3 state.db "SELECT title, error_message FROM processed_items WHERE status='failed';"
 ```
 
-**重要语义**：`is_processed` 把**任何一条记录都当作已完成**，`failed` 也不例外 —— 也就是说**失败的条目默认不会在后续运行中自动重试**。
+**重要语义**：`is_processed` 只把 `status='uploaded'` 当作已完成 —— **`failed` 的条目下一轮会自动重试**，无需手动删行。
 
-如果某条节目一直没传上去，手动删掉那行再跑一次：
+重试就是走正常流程：该条目仍在 RSS 的 `max_items` 窗口内，轮到它时因为没被标记成 `uploaded` 而再次下载。两条边界：
 
-```bash
-sqlite3 state.db "DELETE FROM processed_items WHERE title LIKE '%节目名%';"
-```
+- **没有重试次数上限**：源上的音频文件真挂了（404、链接永久失效），每轮都会重试一遍，日志里会一直刷这条报错。要停掉，把对应行删掉或改状态即可：
+  ```bash
+  sqlite3 state.db "DELETE FROM processed_items WHERE title LIKE '%节目名%';"
+  ```
+- **掉出窗口就不重试了**：如果失败时该条目已经排到 `max_items` 之外（默认 10），后续抓取看不到它，也就不会重试。
 
-> 代码里有个 `StateDB.get_pending_items()`（返回 `pending`/`failed` 行）是为重试准备的，但主流程从未调用它；要改重试语义，`is_processed` 和它得一起动。
+> 代码里还有个 `StateDB.get_pending_items()`（返回 `pending`/`failed` 行），主流程仍未调用 —— 重试不需要它，靠 `is_processed` 过滤就够。只有想重试「已掉出 RSS 窗口」的历史条目时才用得上。
 
 ---
 
@@ -428,7 +430,7 @@ A：`config.yaml` 校验失败。给该源补上 `itunes_id`（推荐）或 `rss
 A：先看日志里的 `error_message`：
 - 含 `RATE_LIMIT:` → 阿里云盘 429 限流，调大 `upload_delay`（如 `5`）再重跑；
 - token 失效 → `python scripts/get_token.py` 重新扫码；
-- 其它错误 → `sqlite3 state.db "SELECT title, error_message FROM processed_items WHERE status='failed';"` 查看，**删掉对应行**后重跑（失败默认不重试）。
+- 其它错误 → `sqlite3 state.db "SELECT title, error_message FROM processed_items WHERE status='failed';"` 查看，**下一轮会自动重试**；若确认是坏链接、不想反复重试，删掉对应行。
 
 **Q：节目换了域名 / RSS 地址变了，会重复下载吗？**
 A：去重键是**解析后的 `rss_url`**，不是 `itunes_id`。地址一变，`state.db` 视为新源，会重新拉一遍；但上传用 `overwrite=True`，同名文件会被覆盖，**只会浪费带宽，不会产生重复文件**。想省流量就配 `itunes_id`，让地址稳定。
@@ -464,7 +466,7 @@ A：都是运行时产物，删了会重建；但 `state.db` 删了 = 全部重�
 
 ## 已知限制
 
-- **失败不自动重试**：`failed` 记录和成功记录一样被视为「已处理」，后续运行跳过（详见上文）。
+- **失败无限重试**：`failed` 记录不会被视为「已处理」，每轮都会重来，且没有次数上限；掉出 `max_items` 窗口的失败条目则再也轮不到（详见上文）。
 - **串行执行**：`download_concurrency` 是预留字段，实际源与节目均串行下载，没有并发。
 - **临时文件按 mtime 清理**：`temp_retention_days` 到期一律删除，不区分上传是否成功。
 - **iTunes 查询不缓存**：每个源每轮多发一次 `lookup` 请求。
