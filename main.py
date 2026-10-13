@@ -82,6 +82,7 @@ def process_feed(feed_cfg, config, state_db, aliyun):
     logger.info(f"[{name}] 获取到 {len(items)} 个条目")
 
     # 3. 逐个处理
+    new_count = 0  # 本轮实际处理的新条目
     for item in items:
         guid = item["guid"]
         if not guid:
@@ -92,6 +93,7 @@ def process_feed(feed_cfg, config, state_db, aliyun):
         if state_db.is_processed(rss_url, guid):
             continue
 
+        new_count += 1
         title = item["title"]
         enclosure_url = item["enclosure_url"]
         enclosure_type = item["enclosure_type"]
@@ -152,6 +154,8 @@ def process_feed(feed_cfg, config, state_db, aliyun):
         # 9. 上传间隔
         time.sleep(config.upload_delay)
 
+    if new_count == 0:
+        logger.info(f"[{name}] 没有新条目，获取到的 {len(items)} 个都已处理过，无需下载")
     logger.info(f"[{name}] 处理完成")
 
 
