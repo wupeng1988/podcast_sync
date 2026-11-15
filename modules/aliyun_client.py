@@ -5,12 +5,29 @@ from aligo import Aligo
 class AliyunClient:
     def __init__(self, refresh_token="", token_file=""):
         kwargs = {}
-        if refresh_token:
+        name = token_file or "aligo"
+        token_path = os.path.expanduser(f"~/.aligo/{name}.json")
+        # token 文件已存在：完全交给 aligo 自己管理，不再传 refresh_token。
+        # 阿里云盘的 refresh_token 是轮换制，每次刷新后旧的就失效；
+        # config.yaml 里存的只是某次快照，如果每次运行都拿它去刷新，
+        # 会一直 400 失败并触发重新扫码（新 token 只进了 aligo 的文件，config 没更新）。
+        if os.path.exists(token_path):
+            kwargs["name"] = name
+        elif refresh_token:
+            # 首次运行：用 config.yaml 里的 refresh_token 引导登录，
+            # 成功后 aligo 会把轮换出的新 token 写入 token 文件
             kwargs["refresh_token"] = refresh_token
-        if token_file:
-            kwargs["name"] = token_file
+            kwargs["name"] = name
+        # 两者都没有：Aligo 自己弹二维码登录并写入 token 文件
         self.ali = Aligo(**kwargs)
         self._dir_cache = {}
+
+    def current_refresh_token(self):
+        """读取 aligo 当前持有的 refresh_token（可能已在刷新过程中轮换）"""
+        token = getattr(self.ali, "token", None)
+        if token is None:
+            return ""
+        return getattr(token, "refresh_token", "") or ""
 
     def _get_or_create_folder(self, folder_path):
         """获取或创建目录，返回 folder_id"""

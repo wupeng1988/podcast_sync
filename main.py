@@ -14,6 +14,7 @@ from modules.itunes import lookup_feed_url
 from modules.downloader import download_file
 from modules.naming import get_extension, build_filename
 from modules.aliyun_client import AliyunClient
+from modules.token_sync import sync_refresh_token_to_config
 
 logger = logging.getLogger("podcast_sync")
 
@@ -209,6 +210,15 @@ def run_sync():
 
         # 清理临时文件
         cleanup_temp_files(config, state_db)
+
+        # 把 aligo 轮换出的最新 refresh_token 写回 config.yaml 兜底
+        # （正常情况下 token 文件 ~/.aligo/aligo.json 一直存在，用不到它；
+        #   但万一 token 文件被删，还能用 config 里的这份引导登录）
+        sync_refresh_token_to_config(
+            config_path="config.yaml",
+            new_token=aliyun.current_refresh_token(),
+            old_token=aliyun_cfg.get("refresh_token", ""),
+        )
 
     except Exception as e:
         logger.error(f"同步任务异常: {e}", exc_info=True)
